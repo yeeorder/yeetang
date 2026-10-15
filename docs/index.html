@@ -1,17 +1,223 @@
-<!DOCTYPE html>
-<html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>訂貨單</title>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#176b45">
+<title>飴棠豆花訂貨系統</title>
 <style>
-*{box-sizing:border-box}body{margin:0;padding:24px 12px;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;background:#f3f4f6;font-family:"Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;color:#222}.sheet{width:min(640px,100%);background:#fff;border:1px solid #999;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:24px}table{width:100%;border-collapse:collapse;table-layout:fixed}col.d{width:32%}col.e{width:34%}col.f{width:34%}td{border:1px solid #777;height:44px;padding:7px 9px;font-size:18px;vertical-align:middle;background:#fff}.empty{color:transparent}.yellow{background:#ffff00}.yellow input{width:100%;border:1px solid #aaa;background:#fff;border-radius:4px;padding:7px 8px;font-size:18px;font-family:inherit;outline:none}.blue{background:#00b0f0;text-align:center;font-weight:600}.green{background:#70ad47;padding:0}.red{background:#ff0000;padding:0}button{width:100%;height:100%;min-height:52px;border:0;cursor:pointer;font-size:20px;font-weight:700;font-family:inherit;color:#fff;background:transparent}button:hover{background:rgba(255,255,255,.15)}@media(max-width:480px){body{padding:10px 6px}.sheet{padding:12px}td{font-size:16px;height:42px}.yellow input{font-size:16px}button{font-size:18px}}
-</style></head><body><div class="sheet"><table aria-label="訂貨單"><colgroup><col class="d"><col class="e"><col class="f"></colgroup>
-<tr><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr><tr><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
-<tr><td class="yellow"><input id="D3" type="text"></td><td>店訂貨</td><td class="empty">&nbsp;</td></tr><tr><td colspan="3">丞韻</td></tr><tr><td>訂貨項目</td><td>數量</td><td>單位</td></tr>
-<tr><td>仙草汁</td><td class="yellow"><input id="E6" type="text" inputmode="decimal"></td><td>箱</td></tr><tr><td>二砂糖</td><td class="yellow"><input id="E7" type="text" inputmode="decimal"></td><td>20KG/袋</td></tr><tr><td>白砂糖</td><td class="yellow"><input id="E8" type="text" inputmode="decimal"></td><td>20KG/袋</td></tr>
-<tr><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr><tr><td class="empty">&nbsp;</td><td colspan="2" class="blue" id="dateCell"></td></tr><tr><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr>
-<tr><td class="empty">&nbsp;</td><td colspan="2" class="green"><button id="sendBtn">送出</button></td></tr><tr><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td></tr><tr><td class="empty">&nbsp;</td><td class="empty">&nbsp;</td><td class="red"><button id="clearBtn">清除</button></td></tr>
-</table></div>
+:root{font-family:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#20312a;background:#f3f6f4;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0}
+header{background:#176b45;color:#fff;padding:18px clamp(16px,3vw,32px);box-shadow:0 2px 8px #0001}
+header h1{margin:0;font-size:clamp(1.2rem,3vw,1.65rem);letter-spacing:.03em}
+header p{margin:6px 0 0;color:#dcefe4;font-size:.9rem}
+main{max-width:1120px;margin:20px auto;padding:0 14px 28px}
+.top-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.field,.panel,.item-panel,.output-panel{background:#fff;border:1px solid #dce5df;border-radius:14px;padding:15px;box-shadow:0 2px 8px #163b2410}
+.vendor-note-panel{margin-top:12px;background:#fff9e8;border:1px solid #ead9a7;border-radius:12px;padding:12px 15px;color:#594719}
+.vendor-note-panel strong{display:block;font-size:.9rem;margin-bottom:5px}
+.vendor-note-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+label{display:block;font-weight:700;font-size:.92rem;margin-bottom:7px}
+select,input,textarea{font:inherit}
+select{width:100%;min-height:44px;border:1px solid #cbd8cf;border-radius:9px;background:#fff;padding:9px 10px;color:#20312a}
+.readonly{min-height:44px;display:flex;align-items:center;font-weight:700;font-size:1.05rem;color:#176b45}
+.content{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;margin-top:14px;align-items:start}
+.item-panel{padding:0;overflow:hidden}
+.item-heading{display:grid;grid-template-columns:minmax(0,1fr) 112px 105px;gap:8px;background:#e6f2eb;padding:12px 14px;font-weight:800;color:#23563c;position:sticky;top:0;z-index:1}
+.items-scroll{overflow-y:auto;overscroll-behavior:contain}
+.item-row{display:grid;grid-template-columns:minmax(0,1fr) 112px 105px;gap:8px;align-items:center;padding:9px 14px;border-top:1px solid #edf1ee;min-height:54px}
+.item-name{font-weight:650;overflow-wrap:anywhere}
+.item-note{display:block;color:#687970;font-size:.78rem;margin-top:3px;white-space:pre-wrap}
+.qty{width:100%;min-height:40px;border:1px solid #b9cbbf;border-radius:8px;text-align:center;padding:6px;background:#fff}
+.unit{color:#586b60;font-size:.88rem;overflow-wrap:anywhere}
+.empty{padding:28px 16px;text-align:center;color:#66766d}
+.actions{display:flex;flex-direction:column;gap:10px;position:sticky;top:12px}
+.btn{border:0;border-radius:10px;min-height:48px;padding:12px 16px;font:inherit;font-weight:800;cursor:pointer;transition:filter .15s,transform .05s}
+.btn:active{transform:translateY(1px)}
+.btn:hover{filter:brightness(.96)}
+.submit{background:#16834d;color:white}
+.clear{background:#c83f3f;color:white}
+.output-panel{margin-top:14px}
+.output-panel h2{font-size:1rem;margin:0 0 8px}
+.output-help{font-size:.84rem;color:#65756c;margin:0 0 10px}
+textarea{width:100%;min-height:150px;resize:vertical;border:1px solid #cbd8cf;border-radius:9px;padding:12px;line-height:1.65;background:#fbfdfb}
+.output-buttons{display:flex;gap:8px;margin-top:8px}
+.copy{background:#e5eee8;color:#23563c;min-height:40px}
+.status{font-size:.86rem;color:#176b45;min-height:1.2em;margin:8px 0 0}
+footer{text-align:center;color:#75857c;font-size:.8rem;padding:12px}
+@media(max-width:760px){
+ main{margin:12px auto}
+ .top-fields{grid-template-columns:1fr 1fr}
+ .field:last-child{grid-column:1/-1}
+ .content{grid-template-columns:1fr}
+ .actions{position:static;display:grid;grid-template-columns:1fr 1fr;order:2}
+ .item-heading,.item-row{grid-template-columns:minmax(0,1fr) 88px 78px;gap:6px;padding-left:10px;padding-right:10px}
+ .item-heading{font-size:.88rem}
+ .item-row{min-height:52px}
+ .qty{min-height:42px}
+}
+@media(max-width:420px){.top-fields{grid-template-columns:1fr}.field:last-child{grid-column:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>飴棠豆花訂貨系統</h1>
+  <p>請選擇店家與廠商，填寫需要訂購的數量後送出。</p>
+</header>
+<main>
+  <section class="top-fields" aria-label="訂單基本資料">
+    <div class="field">
+      <label for="store">店家</label>
+      <select id="store" autocomplete="off"></select>
+    </div>
+    <div class="field">
+      <label for="vendor">廠商</label>
+      <select id="vendor" autocomplete="off"></select>
+    </div>
+    <div class="field">
+      <label>訂貨日期</label>
+      <div id="orderDate" class="readonly" aria-live="polite"></div>
+    </div>
+  </section>
+  <section class="vendor-note-panel" aria-live="polite" aria-label="廠商備註">
+    <strong>廠商備註／訂貨日期</strong>
+    <div id="vendorNote" class="vendor-note-text">選擇廠商後顯示備註。</div>
+  </section>
+  <section class="content">
+    <div class="item-panel">
+      <div class="item-heading"><span>訂貨項目</span><span>數量</span><span>單位</span></div>
+      <div id="itemsScroll" class="items-scroll"><div class="empty">正在載入訂貨資料…</div></div>
+    </div>
+    <aside class="actions" aria-label="訂單操作">
+      <button class="btn submit" id="submitBtn" type="button">送出</button>
+      <button class="btn clear" id="clearBtn" type="button">清除</button>
+    </aside>
+  </section>
+  <section class="output-panel">
+    <h2>訂單輸出內容</h2>
+    <p class="output-help">送出後會依照原訂單格式產生文字；數量空白或為 0 的項目不會輸出。</p>
+    <textarea id="output" aria-label="訂單輸出內容" placeholder="按下「送出訂單」後，訂單文字會顯示在這裡。" readonly></textarea>
+    <div class="output-buttons"><button class="btn copy" id="copyBtn" type="button">複製訂單文字</button></div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+<footer>訂貨資料以 Excel 匯出的 data.json 為準。</footer>
 <script>
-const $=id=>document.getElementById(id);
-const now=new Date();$("dateCell").textContent=(now.getFullYear()-1911)+"/"+String(now.getMonth()+1).padStart(2,"0")+"/"+String(now.getDate()).padStart(2,"0");
-$("sendBtn").onclick=()=>{const msg=[$("D3").value.trim()+" 店訂貨","仙草汁 "+$("E6").value.trim()+" 箱","二砂糖 "+$("E7").value.trim()+" 20KG/袋","白砂糖 "+$("E8").value.trim()+" 20KG/袋"].join("\n");location.href="https://line.me/R/msg/text/?"+encodeURIComponent(msg)};
-$("clearBtn").onclick=()=>["D3","E6","E7","E8"].forEach(id=>$(id).value="");
-</script></body></html>
+let DATA = null;
+const $ = id => document.getElementById(id);
+const storeEl = $('store'), vendorEl = $('vendor'), itemsScroll = $('itemsScroll');
+function todayMMDD(){
+  const d = new Date();
+  return String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0');
+}
+$('orderDate').textContent = todayMMDD();
+function setStatus(msg){ $('status').textContent = msg; }
+function fillSelect(el, values){
+  el.replaceChildren();
+  values.forEach(value => {
+    const option = document.createElement('option');
+    option.value = value; option.textContent = value;
+    el.appendChild(option);
+  });
+}
+function getAllowedItems(store, vendor){
+  const all = DATA.itemsByVendor[vendor] || [];
+  const blocked = new Set(DATA.blockedItems[store + '||' + vendor] || []);
+  return all.filter(item => !blocked.has(item.name));
+}
+function renderVendorNote(){
+  if(!DATA) return;
+  const store = storeEl.value, vendor = vendorEl.value;
+  // 對應 Excel「訂貨單頁面」A5：依店家與廠商，取可訂品項中第一筆非空白備註。
+  const items = getAllowedItems(store, vendor);
+  const noteItem = items.find(item => item.note && item.note.trim());
+  $('vendorNote').textContent = noteItem ? noteItem.note : '此廠商目前沒有設定廠商備註／訂貨日期。';
+}
+function renderItems(){
+  if(!DATA) return;
+  const store = storeEl.value, vendor = vendorEl.value;
+  const items = getAllowedItems(store, vendor);
+  renderVendorNote();
+  itemsScroll.replaceChildren();
+  if(items.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'empty'; empty.textContent = '此店家／廠商目前沒有可訂購的品項。';
+    itemsScroll.appendChild(empty);
+    itemsScroll.style.maxHeight = 'calc(3 * 54px)';
+    return;
+  }
+  items.forEach((item, index) => {
+    const row = document.createElement('div'); row.className = 'item-row';
+    const name = document.createElement('div'); name.className = 'item-name'; name.textContent = item.name;
+    if(item.note){
+      const note = document.createElement('span'); note.className = 'item-note'; note.textContent = item.note; name.appendChild(note);
+    }
+    const qty = document.createElement('input');
+    qty.className = 'qty'; qty.type = 'number'; qty.min = '0'; qty.step = 'any'; qty.value = '0';
+    qty.inputMode = 'decimal'; qty.setAttribute('aria-label', item.name + '數量');
+    qty.dataset.item = item.name; qty.dataset.unit = item.unit;
+    qty.addEventListener('input', () => {
+      if(qty.value !== '' && Number(qty.value) < 0) qty.value = '0';
+      setStatus('');
+    });
+    const unit = document.createElement('div'); unit.className = 'unit'; unit.textContent = item.unit;
+    row.append(name, qty, unit); itemsScroll.appendChild(row);
+  });
+  // 末項後保留兩列的空間；商品多時限制可視高度並在清單內捲動。
+  itemsScroll.style.maxHeight = `min(calc(${items.length + 2} * 54px), 58vh)`;
+}
+function refreshVendors(preferFirst=true){
+  const vendors = DATA.vendorsByStore[storeEl.value] || [];
+  fillSelect(vendorEl, vendors);
+  if(preferFirst && vendors.length) vendorEl.selectedIndex = 0;
+  renderItems();
+}
+storeEl.addEventListener('change', () => { refreshVendors(true); $('output').value=''; setStatus('店家已更換，廠商已恢復為清單第一項。'); });
+vendorEl.addEventListener('change', () => { renderItems(); $('output').value=''; setStatus(''); });
+$('submitBtn').addEventListener('click', () => {
+  const store = storeEl.value, vendor = vendorEl.value, date = todayMMDD();
+  const lines = [`${store}.${DATA.storeSuffix || '店'} ${date}`];
+  const inputs = itemsScroll.querySelectorAll('input.qty');
+  inputs.forEach(input => {
+    const raw = input.value.trim();
+    if(raw === '') return;
+    const qty = Number(raw);
+    if(!Number.isFinite(qty) || qty <= 0) return;
+    const quantity = String(qty);
+    lines.push(`${input.dataset.item} ${quantity} ${input.dataset.unit}`.trim());
+  });
+  $('output').value = lines.length > 1 ? lines.join('\n') : `${lines[0]}\n（沒有填寫大於 0 的訂購數量）`;
+  setStatus('訂單文字已產生，可複製後貼到聊天或其他系統。');
+});
+$('clearBtn').addEventListener('click', () => {
+  itemsScroll.querySelectorAll('input.qty').forEach(input => input.value = '0');
+  $('output').value = '';
+  setStatus('所有數量已清除並恢復為 0。');
+});
+$('copyBtn').addEventListener('click', async () => {
+  const text = $('output').value;
+  if(!text){ setStatus('目前沒有可複製的訂單內容，請先按「送出訂單」。'); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus('已複製訂單文字。');
+  } catch(e) {
+    $('output').focus(); $('output').select();
+    setStatus('瀏覽器未允許自動複製，已選取文字，請按 Ctrl+C 複製。');
+  }
+});
+fetch('./data.json')
+  .then(r => { if(!r.ok) throw new Error('無法讀取 data.json'); return r.json(); })
+  .then(data => {
+    DATA = data;
+    fillSelect(storeEl, DATA.stores || []);
+    refreshVendors(true);
+    setStatus('資料載入完成。');
+  })
+  .catch(err => {
+    itemsScroll.innerHTML = '<div class="empty">無法載入訂貨資料。請確認 index.html 與 data.json 放在同一個資料夾，並透過 GitHub Pages 或本機網站伺服器開啟。</div>';
+    setStatus(err.message);
+  });
+</script>
+</body>
+</html>
