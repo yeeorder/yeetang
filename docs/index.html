@@ -261,7 +261,7 @@ $('submitBtn').addEventListener('click', () => {
     lines.push(`${input.dataset.item} ${String(qty)} ${input.dataset.unit}`.trim());
     orderItems.push({name:input.dataset.item, quantity:qty, unit:input.dataset.unit});
   });
-  $('output').value = lines.length > 1 ? lines.join('\\n') : `${lines[0]}\\n（沒有填寫大於 0 的訂購數量）`;
+  $('output').value = lines.length > 1 ? lines.join('\n') : `${lines[0]}\n（沒有填寫大於 0 的訂購數量）`;
   if(orderItems.length){
     try {
       const records = loadRecords();
