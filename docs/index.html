@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="zh-Hant">
 <head>
@@ -122,6 +123,7 @@ footer{text-align:center;color:#75857c;font-size:.8rem;padding:12px}
 let DATA = null;
 const $ = id => document.getElementById(id);
 const storeEl = $('store'), vendorEl = $('vendor'), itemsScroll = $('itemsScroll');
+
 function todayMMDD(){
   const d = new Date();
   return String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0');
@@ -129,68 +131,174 @@ function todayMMDD(){
 function outputDate(date = new Date()){
   return String(date.getMonth()+1).padStart(2,'0') + '月' + String(date.getDate()).padStart(2,'0') + '日';
 }
+
 const RECORDS_KEY = 'yeetang_order_records_v1';
+
+/* Google Apps Script 網頁應用程式網址 */
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_-R0L-S2n-Z58OQdrdVAaSDi4usZ4nf-K9ql0j8ZvzR1Su1qLCThkjkWzPeIVMaTHqw/exec';
+
 function loadRecords(){
-  try { const value = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]'); return Array.isArray(value) ? value : []; }
-  catch(e) { return []; }
+  try {
+    const value = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch(e) {
+    return [];
+  }
 }
-function saveRecords(records){ localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); }
+function saveRecords(records){
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+}
 function localISODate(date = new Date()){
   return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
 }
-function escapeCSV(value){ return '"' + String(value ?? '').replace(/"/g, '""') + '"'; }
+function escapeCSV(value){
+  return '"' + String(value ?? '').replace(/"/g, '""') + '"';
+}
 function downloadCSV(filename, rows){
   const csv = '\uFEFF' + rows.map(row => row.map(escapeCSV).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function reportMonth(){ return $('reportMonth').value || localISODate().slice(0,7); }
+function reportMonth(){
+  return $('reportMonth').value || localISODate().slice(0,7);
+}
 function getMonthRows(){
   const month = reportMonth();
   return loadRecords().filter(record => record.date && record.date.slice(0,7) === month)
-    .flatMap(record => (record.items || []).map(item => ({...item, date:record.date, store:record.store, vendor:record.vendor, submittedAt:record.submittedAt})));
+    .flatMap(record => (record.items || []).map(item => ({
+      ...item,
+      date:record.date,
+      store:record.store,
+      vendor:record.vendor,
+      submittedAt:record.submittedAt
+    })));
 }
 function aggregateRows(rows){
   const sums = new Map();
   rows.forEach(row => {
     const key = [row.store,row.vendor,row.name,row.unit].join('|');
-    const old = sums.get(key) || {store:row.store,vendor:row.vendor,name:row.name,unit:row.unit,quantity:0};
-    old.quantity += Number(row.quantity) || 0; sums.set(key,old);
+    const old = sums.get(key) || {
+      store:row.store,
+      vendor:row.vendor,
+      name:row.name,
+      unit:row.unit,
+      quantity:0
+    };
+    old.quantity += Number(row.quantity) || 0;
+    sums.set(key,old);
   });
-  return [...sums.values()].sort((a,b)=>(a.store+a.vendor+a.name).localeCompare(b.store+b.vendor+b.name,'zh-Hant'));
+  return [...sums.values()].sort((a,b)=>
+    (a.store+a.vendor+a.name).localeCompare(b.store+b.vendor+b.name,'zh-Hant')
+  );
 }
 function renderReports(){
-  const rows = getMonthRows(), detailBody=$('detailBody'), summaryBody=$('summaryBody');
-  detailBody.replaceChildren(); summaryBody.replaceChildren();
-  $('recordCount').textContent = reportMonth() + ' 共 ' + rows.length + ' 筆商品明細（本機全部訂單 ' + loadRecords().length + ' 張）。';
-  const addCell = (tr,value,right=false) => { const td=document.createElement('td'); td.textContent=String(value ?? ''); td.style.cssText='padding:8px;border-bottom:1px solid #edf1ee;'+(right?'text-align:right;':''); tr.appendChild(td); };
+  const rows = getMonthRows();
+  const detailBody = $('detailBody');
+  const summaryBody = $('summaryBody');
+  detailBody.replaceChildren();
+  summaryBody.replaceChildren();
+
+  $('recordCount').textContent = reportMonth() + ' 共 ' + rows.length +
+    ' 筆商品明細（本機全部訂單 ' + loadRecords().length + ' 張）。';
+
+  const addCell = (tr,value,right=false) => {
+    const td = document.createElement('td');
+    td.textContent = String(value ?? '');
+    td.style.cssText = 'padding:8px;border-bottom:1px solid #edf1ee;' +
+      (right ? 'text-align:right;' : '');
+    tr.appendChild(td);
+  };
+
   if(!rows.length){
-    let tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='這個月份尚無訂單紀錄。';td.style.padding='12px';tr.appendChild(td);detailBody.appendChild(tr);
-    tr=document.createElement('tr');td=document.createElement('td');td.colSpan=5;td.textContent='這個月份尚無訂單紀錄。';td.style.padding='12px';tr.appendChild(td);summaryBody.appendChild(tr);return;
+    let tr = document.createElement('tr');
+    let td = document.createElement('td');
+    td.colSpan = 7;
+    td.textContent = '這個月份尚無訂單紀錄。';
+    td.style.padding = '12px';
+    tr.appendChild(td);
+    detailBody.appendChild(tr);
+
+    tr = document.createElement('tr');
+    td = document.createElement('td');
+    td.colSpan = 5;
+    td.textContent = '這個月份尚無訂單紀錄。';
+    td.style.padding = '12px';
+    tr.appendChild(td);
+    summaryBody.appendChild(tr);
+    return;
   }
-  rows.sort((a,b)=>(a.date+a.store+a.vendor+a.name).localeCompare(b.date+b.store+b.vendor+b.name,'zh-Hant'));
-  rows.forEach(row=>{const tr=document.createElement('tr');addCell(tr,row.date);addCell(tr,row.store);addCell(tr,row.vendor);addCell(tr,row.name);addCell(tr,row.quantity,true);addCell(tr,row.unit);addCell(tr,new Date(row.submittedAt).toLocaleString('zh-TW',{hour12:false}));detailBody.appendChild(tr);});
-  aggregateRows(rows).forEach(row=>{const tr=document.createElement('tr');addCell(tr,row.store);addCell(tr,row.vendor);addCell(tr,row.name);addCell(tr,Number(row.quantity.toFixed(4)),true);addCell(tr,row.unit);summaryBody.appendChild(tr);});
+
+  rows.sort((a,b)=>
+    (a.date+a.store+a.vendor+a.name).localeCompare(b.date+b.store+b.vendor+b.name,'zh-Hant')
+  );
+
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    addCell(tr,row.date);
+    addCell(tr,row.store);
+    addCell(tr,row.vendor);
+    addCell(tr,row.name);
+    addCell(tr,row.quantity,true);
+    addCell(tr,row.unit);
+    addCell(tr,new Date(row.submittedAt).toLocaleString('zh-TW',{hour12:false}));
+    detailBody.appendChild(tr);
+  });
+
+  aggregateRows(rows).forEach(row => {
+    const tr = document.createElement('tr');
+    addCell(tr,row.store);
+    addCell(tr,row.vendor);
+    addCell(tr,row.name);
+    addCell(tr,Number(row.quantity.toFixed(4)),true);
+    addCell(tr,row.unit);
+    summaryBody.appendChild(tr);
+  });
 }
 function exportDetail(){
-  const rows=getMonthRows();if(!rows.length){$('recordStatus').textContent='此月份沒有明細可匯出。';return;}
-  downloadCSV(reportMonth()+'_每日訂貨明細.csv',[['日期','店家','廠商','商品','數量','單位','送單時間'],...rows.map(r=>[r.date,r.store,r.vendor,r.name,r.quantity,r.unit,new Date(r.submittedAt).toLocaleString('zh-TW',{hour12:false})])]);
-  $('recordStatus').textContent='每日明細 CSV 已開始下載。';
+  const rows = getMonthRows();
+  if(!rows.length){
+    $('recordStatus').textContent = '此月份沒有明細可匯出。';
+    return;
+  }
+  downloadCSV(reportMonth()+'_每日訂貨明細.csv',[
+    ['日期','店家','廠商','商品','數量','單位','送單時間'],
+    ...rows.map(r=>[
+      r.date,r.store,r.vendor,r.name,r.quantity,r.unit,
+      new Date(r.submittedAt).toLocaleString('zh-TW',{hour12:false})
+    ])
+  ]);
+  $('recordStatus').textContent = '每日明細 CSV 已開始下載。';
 }
 function exportSummary(){
-  const rows=getMonthRows();if(!rows.length){$('recordStatus').textContent='此月份沒有總計可匯出。';return;}
-  downloadCSV(reportMonth()+'_每月商品總計.csv',[['店家','廠商','商品','月總數量','單位'],...aggregateRows(rows).map(r=>[r.store,r.vendor,r.name,Number(r.quantity.toFixed(4)),r.unit])]);
-  $('recordStatus').textContent='每月商品總計 CSV 已開始下載。';
+  const rows = getMonthRows();
+  if(!rows.length){
+    $('recordStatus').textContent = '此月份沒有總計可匯出。';
+    return;
+  }
+  downloadCSV(reportMonth()+'_每月商品總計.csv',[
+    ['店家','廠商','商品','月總數量','單位'],
+    ...aggregateRows(rows).map(r=>[
+      r.store,r.vendor,r.name,Number(r.quantity.toFixed(4)),r.unit
+    ])
+  ]);
+  $('recordStatus').textContent = '每月商品總計 CSV 已開始下載。';
 }
 
 $('orderDate').textContent = todayMMDD();
-function setStatus(msg){ $('status').textContent = msg; }
+
+function setStatus(msg){
+  $('status').textContent = msg;
+}
 function fillSelect(el, values){
   el.replaceChildren();
   values.forEach(value => {
     const option = document.createElement('option');
-    option.value = value; option.textContent = value;
+    option.value = value;
+    option.textContent = value;
     el.appendChild(option);
   });
 }
@@ -201,42 +309,70 @@ function getAllowedItems(store, vendor){
 }
 function renderVendorNote(){
   if(!DATA) return;
-  const store = storeEl.value, vendor = vendorEl.value;
+  const store = storeEl.value;
+  const vendor = vendorEl.value;
   // 對應 Excel「訂貨單頁面」A5：依店家與廠商，取可訂品項中第一筆非空白備註。
   const items = getAllowedItems(store, vendor);
   const noteItem = items.find(item => item.note && item.note.trim());
-  $('vendorNote').textContent = noteItem ? noteItem.note : '此廠商目前沒有設定廠商備註／訂貨日期。';
+  $('vendorNote').textContent = noteItem
+    ? noteItem.note
+    : '此廠商目前沒有設定廠商備註／訂貨日期。';
 }
 function renderItems(){
   if(!DATA) return;
-  const store = storeEl.value, vendor = vendorEl.value;
+  const store = storeEl.value;
+  const vendor = vendorEl.value;
   const items = getAllowedItems(store, vendor);
   renderVendorNote();
   itemsScroll.replaceChildren();
+
   if(items.length === 0){
     const empty = document.createElement('div');
-    empty.className = 'empty'; empty.textContent = '此店家／廠商目前沒有可訂購的品項。';
+    empty.className = 'empty';
+    empty.textContent = '此店家／廠商目前沒有可訂購的品項。';
     itemsScroll.appendChild(empty);
     itemsScroll.style.maxHeight = 'calc(3 * 54px)';
     return;
   }
-  items.forEach((item, index) => {
-    const row = document.createElement('div'); row.className = 'item-row';
-    const name = document.createElement('div'); name.className = 'item-name'; name.textContent = item.name;
+
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+
+    const name = document.createElement('div');
+    name.className = 'item-name';
+    name.textContent = item.name;
+
     if(item.note){
-      const note = document.createElement('span'); note.className = 'item-note'; note.textContent = item.note; name.appendChild(note);
+      const note = document.createElement('span');
+      note.className = 'item-note';
+      note.textContent = item.note;
+      name.appendChild(note);
     }
+
     const qty = document.createElement('input');
-    qty.className = 'qty'; qty.type = 'number'; qty.min = '0'; qty.step = 'any'; qty.value = '0';
-    qty.inputMode = 'decimal'; qty.setAttribute('aria-label', item.name + '數量');
-    qty.dataset.item = item.name; qty.dataset.unit = item.unit;
+    qty.className = 'qty';
+    qty.type = 'number';
+    qty.min = '0';
+    qty.step = 'any';
+    qty.value = '0';
+    qty.inputMode = 'decimal';
+    qty.setAttribute('aria-label', item.name + '數量');
+    qty.dataset.item = item.name;
+    qty.dataset.unit = item.unit;
     qty.addEventListener('input', () => {
       if(qty.value !== '' && Number(qty.value) < 0) qty.value = '0';
       setStatus('');
     });
-    const unit = document.createElement('div'); unit.className = 'unit'; unit.textContent = item.unit;
-    row.append(name, qty, unit); itemsScroll.appendChild(row);
+
+    const unit = document.createElement('div');
+    unit.className = 'unit';
+    unit.textContent = item.unit;
+
+    row.append(name, qty, unit);
+    itemsScroll.appendChild(row);
   });
+
   // 末項後保留兩列的空間；商品多時限制可視高度並在清單內捲動。
   itemsScroll.style.maxHeight = `min(calc(${items.length + 2} * 54px), 58vh)`;
 }
@@ -246,57 +382,139 @@ function refreshVendors(preferFirst=true){
   if(preferFirst && vendors.length) vendorEl.selectedIndex = 0;
   renderItems();
 }
-storeEl.addEventListener('change', () => { refreshVendors(true); $('output').value=''; setStatus('店家已更換，廠商已恢復為清單第一項。'); });
-vendorEl.addEventListener('change', () => { renderItems(); $('output').value=''; setStatus(''); });
-$('submitBtn').addEventListener('click', () => {
-  const store = storeEl.value, vendor = vendorEl.value, now = new Date(), date = outputDate(now);
+
+storeEl.addEventListener('change', () => {
+  refreshVendors(true);
+  $('output').value = '';
+  setStatus('店家已更換，廠商已恢復為清單第一項。');
+});
+vendorEl.addEventListener('change', () => {
+  renderItems();
+  $('output').value = '';
+  setStatus('');
+});
+
+/* 送出訂單：保留本機紀錄，同時傳送至 Google 試算表 */
+$('submitBtn').addEventListener('click', async () => {
+  if(!DATA || !storeEl.value || !vendorEl.value){
+    setStatus('訂貨資料尚未載入完成，請稍後再試。');
+    return;
+  }
+
+  const store = storeEl.value;
+  const vendor = vendorEl.value;
+  const now = new Date();
+  const date = outputDate(now);
   const lines = [`${store}${DATA.storeSuffix || '店'} ${date}`];
   const orderItems = [];
   const inputs = itemsScroll.querySelectorAll('input.qty');
+
   inputs.forEach(input => {
     const raw = input.value.trim();
     if(raw === '') return;
     const qty = Number(raw);
     if(!Number.isFinite(qty) || qty <= 0) return;
+
     lines.push(`${input.dataset.item} ${String(qty)} ${input.dataset.unit}`.trim());
-    orderItems.push({name:input.dataset.item, quantity:qty, unit:input.dataset.unit});
+    orderItems.push({
+      name:input.dataset.item,
+      quantity:qty,
+      unit:input.dataset.unit
+    });
   });
-  $('output').value = lines.length > 1 ? lines.join('\n') : `${lines[0]}\n（沒有填寫大於 0 的訂購數量）`;
-  if(orderItems.length){
-    try {
-      const records = loadRecords();
-      records.push({id:String(now.getTime())+'-'+Math.random().toString(36).slice(2,8),date:localISODate(now),store,vendor,submittedAt:now.toISOString(),items:orderItems});
-      saveRecords(records); renderReports();
-      $('recordStatus').textContent='本次訂單已保存到目前瀏覽器。';
-    } catch(e) {
-      $('recordStatus').textContent='警告：訂單文字已產生，但瀏覽器無法保存本機紀錄。';
-    }
+
+  $('output').value = lines.length > 1
+    ? lines.join('\n')
+    : `${lines[0]}\n（沒有填寫大於 0 的訂購數量）`;
+
+  if(!orderItems.length){
+    setStatus('已產生訂單標題，但沒有大於 0 的商品數量，因此未建立訂單紀錄。');
+    $('recordStatus').textContent = '沒有大於 0 的商品數量，本次未寫入訂單紀錄。';
+    return;
   }
-  setStatus(orderItems.length ? '訂單文字已產生，並已保存本機紀錄。' : '已產生訂單標題，但沒有大於 0 的商品數量，因此未建立訂單紀錄。');
+
+  /* 先保存原有的本機訂單紀錄與月報表 */
+  let localSaved = false;
+  try {
+    const records = loadRecords();
+    records.push({
+      id:String(now.getTime())+'-'+Math.random().toString(36).slice(2,8),
+      date:localISODate(now),
+      store,
+      vendor,
+      submittedAt:now.toISOString(),
+      items:orderItems
+    });
+    saveRecords(records);
+    renderReports();
+    localSaved = true;
+    $('recordStatus').textContent = '本次訂單已保存到目前瀏覽器。';
+  } catch(e) {
+    $('recordStatus').textContent = '警告：瀏覽器無法保存本機紀錄。仍會嘗試傳送至 Google 試算表。';
+  }
+
+  /*
+   * 傳送到 Google Apps Script。
+   * no-cors 模式無法讀取伺服器回覆，因此不能只靠網頁訊息判定寫入成功。
+   */
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        store,
+        vendor,
+        orderDate: date,
+        items: orderItems
+      })
+    });
+
+    setStatus('訂單文字已產生，Google 試算表寫入請求已送出。請到「訂單明細」確認是否新增資料。');
+    $('recordStatus').textContent =
+      (localSaved ? '本次訂單已保存到目前瀏覽器。' : '本機紀錄未能保存。') +
+      ' Google 試算表寫入請求已送出，請另外確認「訂單明細」。';
+  } catch(e) {
+    setStatus('訂單文字已產生，但傳送 Google 試算表時發生錯誤。請檢查網路後再試。');
+    $('recordStatus').textContent =
+      (localSaved ? '本機紀錄已保存。' : '本機紀錄未能保存。') +
+      ' 傳送 Google 試算表失敗：' + String(e.message || e);
+  }
 });
+
 $('clearBtn').addEventListener('click', () => {
   itemsScroll.querySelectorAll('input.qty').forEach(input => input.value = '0');
   $('output').value = '';
   setStatus('所有數量已清除並恢復為 0。');
 });
+
 $('copyBtn').addEventListener('click', async () => {
   const text = $('output').value;
-  if(!text){ setStatus('目前沒有可複製的訂單內容，請先按「送出訂單」。'); return; }
+  if(!text){
+    setStatus('目前沒有可複製的訂單內容，請先按「送出訂單」。');
+    return;
+  }
   try {
     await navigator.clipboard.writeText(text);
     setStatus('已複製訂單文字。');
   } catch(e) {
-    $('output').focus(); $('output').select();
+    $('output').focus();
+    $('output').select();
     setStatus('瀏覽器未允許自動複製，已選取文字，請按 Ctrl+C 複製。');
   }
 });
+
 $('reportMonth').value = localISODate().slice(0,7);
 $('reportMonth').addEventListener('change', renderReports);
 $('exportDetailBtn').addEventListener('click', exportDetail);
 $('exportSummaryBtn').addEventListener('click', exportSummary);
 renderReports();
+
 fetch('./data.json')
-  .then(r => { if(!r.ok) throw new Error('無法讀取 data.json'); return r.json(); })
+  .then(r => {
+    if(!r.ok) throw new Error('無法讀取 data.json');
+    return r.json();
+  })
   .then(data => {
     DATA = data;
     fillSelect(storeEl, DATA.stores || []);
@@ -304,7 +522,8 @@ fetch('./data.json')
     setStatus('資料載入完成。');
   })
   .catch(err => {
-    itemsScroll.innerHTML = '<div class="empty">無法載入訂貨資料。請確認 index.html 與 data.json 放在同一個資料夾，並透過 GitHub Pages 或本機網站伺服器開啟。</div>';
+    itemsScroll.innerHTML =
+      '<div class="empty">無法載入訂貨資料。請確認 index.html 與 data.json 放在同一個資料夾，並透過 GitHub Pages 或本機網站伺服器開啟。</div>';
     setStatus(err.message);
   });
 </script>
