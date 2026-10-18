@@ -474,12 +474,12 @@ $('submitBtn').addEventListener('click', async () => {
       })
     });
 
-    setStatus('訂單文字已產生，Google 試算表寫入請求已送出。請到「訂單明細」確認是否新增資料。');
+    setStatus('訂單文字已產生。');
     $('recordStatus').textContent =
       (localSaved ? '本次訂單已保存到目前瀏覽器。' : '本機紀錄未能保存。') +
       ' Google 試算表寫入請求已送出，請另外確認「訂單明細」。';
   } catch(e) {
-    setStatus('訂單文字已產生，但傳送 Google 試算表時發生錯誤。請檢查網路後再試。');
+    setStatus('訂單文字已產生，但傳送時發生錯誤。請檢查網路後再試。');
     $('recordStatus').textContent =
       (localSaved ? '本機紀錄已保存。' : '本機紀錄未能保存。') +
       ' 傳送 Google 試算表失敗：' + String(e.message || e);
