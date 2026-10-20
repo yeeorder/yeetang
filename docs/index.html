@@ -349,13 +349,6 @@ function renderItems(){
     name.className = 'item-name';
     name.textContent = item.name;
 
-    if(item.note){
-      const note = document.createElement('span');
-      note.className = 'item-note';
-      note.textContent = item.note;
-      name.appendChild(note);
-    }
-
     const qty = document.createElement('input');
     qty.className = 'qty';
     qty.type = 'number';
