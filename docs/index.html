@@ -428,8 +428,8 @@ $('submitBtn').addEventListener('click', () => {
   });
 
   $('output').value = lines.length > 1
-    ? lines.join('\\n')
-    : `${lines[0]}\\n（沒有填寫大於 0 的訂購數量）`;
+    ? lines.join('\n')
+    : `${lines[0]}\n（沒有填寫大於 0 的訂購數量）`;
 
   if(!orderItems.length){
     currentOrder = null;
