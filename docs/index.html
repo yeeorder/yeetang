@@ -37,6 +37,7 @@ select{width:100%;min-height:44px;border:1px solid #cbd8cf;border-radius:9px;bac
 .btn{border:0;border-radius:10px;min-height:48px;padding:12px 16px;font:inherit;font-weight:800;cursor:pointer;transition:filter .15s,transform .05s}
 .btn:active{transform:translateY(1px)}
 .btn:hover{filter:brightness(.96)}
+.btn:disabled{opacity:.6;cursor:not-allowed;filter:none}
 .submit{background:#16834d;color:white}
 .clear{background:#c83f3f;color:white}
 .output-panel{margin-top:14px}
@@ -95,15 +96,15 @@ footer{text-align:center;color:#75857c;font-size:.8rem;padding:12px}
       <div id="itemsScroll" class="items-scroll"><div class="empty">正在載入訂貨資料…</div></div>
     </div>
     <aside class="actions" aria-label="訂單操作">
-      <button class="btn submit" id="submitBtn" type="button">送出</button>
+      <button class="btn submit" id="submitBtn" type="button">生成文字</button>
       <button class="btn clear" id="clearBtn" type="button">清除</button>
     </aside>
   </section>
   <section class="output-panel">
     <h2>訂單輸出內容</h2>
-    <p class="output-help">送出後會依照原訂單格式產生文字；數量空白或為 0 的項目不會輸出。</p>
-    <textarea id="output" aria-label="訂單輸出內容" placeholder="按下「送出訂單」後，訂單文字會顯示在這裡。" readonly></textarea>
-    <div class="output-buttons"><button class="btn copy" id="copyBtn" type="button">複製訂單文字</button></div>
+    <p class="output-help">生成文字後會依照原訂單格式產生文字；數量空白或為 0 的項目不會輸出。</p>
+    <textarea id="output" aria-label="訂單輸出內容" placeholder="按下「生成文字」後，訂單文字會顯示在這裡。" readonly></textarea>
+    <div class="output-buttons"><button class="btn copy" id="copyBtn" type="button">複製文字並送出</button></div>
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </section>
   <section class="output-panel" id="recordsPanel">
@@ -125,6 +126,8 @@ footer{text-align:center;color:#75857c;font-size:.8rem;padding:12px}
 <footer>訂貨資料以 Excel 匯出的 data.json 為準。</footer>
 <script>
 let DATA = null;
+let currentOrder = null;
+let isSending = false;
 const $ = id => document.getElementById(id);
 const storeEl = $('store'), vendorEl = $('vendor'), itemsScroll = $('itemsScroll');
 
@@ -390,17 +393,20 @@ function refreshVendors(preferFirst=true){
 storeEl.addEventListener('change', () => {
   refreshVendors(true);
   $('output').value = '';
+ currentOrder = null;
   setStatus('店家已更換，廠商已恢復為清單第一項。');
 });
 vendorEl.addEventListener('change', () => {
   renderItems();
   $('output').value = '';
+ currentOrder = null;
   setStatus('');
 });
 
-/* 送出訂單：保留本機紀錄，同時傳送至 Google 試算表 */
-$('submitBtn').addEventListener('click', async () => {
-  if(!DATA || !storeEl.value || !vendorEl.value){
+
+/* 生成文字：只產生訂單，不複製、不開啟 LINE、不寫入後台 */
+$('submitBtn').addEventListener('click', () => {
+  if (!DATA || !storeEl.value || !vendorEl.value) {
     setStatus('訂貨資料尚未載入完成，請稍後再試。');
     return;
   }
@@ -409,105 +415,140 @@ $('submitBtn').addEventListener('click', async () => {
   const vendor = vendorEl.value;
   const now = new Date();
   const date = outputDate(now);
+
   const lines = [`${store}${DATA.storeSuffix || '店'} ${date}`];
   const orderItems = [];
   const inputs = itemsScroll.querySelectorAll('input.qty');
 
   inputs.forEach(input => {
     const raw = input.value.trim();
-    if(raw === '') return;
-    const qty = Number(raw);
-    if(!Number.isFinite(qty) || qty <= 0) return;
+    if (raw === '') return;
 
-    lines.push(`${input.dataset.item} ${String(qty)} ${input.dataset.unit}`.trim());
+    const qty = Number(raw);
+    if (!Number.isFinite(qty) || qty <= 0) return;
+
+    lines.push(
+      `${input.dataset.item} ${String(qty)} ${input.dataset.unit}`.trim()
+    );
+
     orderItems.push({
-      name:input.dataset.item,
-      quantity:qty,
-      unit:input.dataset.unit
+      name: input.dataset.item,
+      quantity: qty,
+      unit: input.dataset.unit
     });
   });
 
-  $('output').value = lines.length > 1
+  $('output').value = orderItems.length
     ? lines.join('\n')
     : `${lines[0]}\n（沒有填寫大於 0 的訂購數量）`;
 
-  if(!orderItems.length){
-    setStatus('已產生訂單標題，但沒有大於 0 的商品數量，因此未建立訂單紀錄。');
-    $('recordStatus').textContent = '沒有大於 0 的商品數量，本次未寫入訂單紀錄。';
-    return;
-  }
-
-  /* 先保存原有的本機訂單紀錄與月報表 */
-  let localSaved = false;
-  try {
-    const records = loadRecords();
-    records.push({
-      id:String(now.getTime())+'-'+Math.random().toString(36).slice(2,8),
-      date:localISODate(now),
-      store,
-      vendor,
-      submittedAt:now.toISOString(),
-      items:orderItems
-    });
-    saveRecords(records);
-    renderReports();
-    localSaved = true;
-    $('recordStatus').textContent = '本次訂單已保存到目前瀏覽器。';
-  } catch(e) {
-    $('recordStatus').textContent = '警告：瀏覽器無法保存本機紀錄。仍會嘗試傳送至 Google 試算表。';
-  }
-
-  /*
-   * 傳送到 Google Apps Script。
-   * no-cors 模式無法讀取伺服器回覆，因此不能只靠網頁訊息判定寫入成功。
-   */
-  try {
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: JSON.stringify({
+  currentOrder = orderItems.length
+    ? {
+        requestId: (
+          typeof crypto !== 'undefined' &&
+          typeof crypto.randomUUID === 'function'
+        )
+          ? crypto.randomUUID()
+          : Date.now() + '-' + Math.random().toString(36).slice(2),
         store,
         vendor,
         orderDate: date,
         items: orderItems
+      }
+    : null;
+
+  setStatus(
+    orderItems.length
+      ? '訂單文字已生成，尚未複製、開啟 LINE 或寫入後台。'
+      : '已生成訂單標題，但沒有有效商品數量，尚未建立訂單。'
+  );
+});
+
+
+
+/* 複製文字並送出：複製、嘗試開啟 LINE、寫入後台 */
+$('copyBtn').addEventListener('click', async () => {
+  const text = $('output').value;
+  const order = currentOrder;
+
+  if (!text || !order || !order.items.length) {
+    setStatus('目前沒有有效的訂單，請先按「生成文字」。');
+    return;
+  }
+
+  if (isSending) return;
+
+  isSending = true;
+
+  const button = $('copyBtn');
+  button.disabled = true;
+  button.textContent = '處理中…';
+
+  // 先嘗試開啟 LINE；實際能否開啟 App 取決於裝置與瀏覽器。
+  const lineWindow = window.open('https://line.me/', '_blank');
+
+  // 3 秒後恢復按鈕。後端也會用 requestId 防止同一訂單重複記錄。
+  setTimeout(() => {
+    isSending = false;
+    button.disabled = false;
+    button.textContent = '複製文字並送出';
+  }, 3000);
+
+  let copied = false;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch (e) {
+    $('output').focus();
+    $('output').select();
+  }
+
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        requestId: order.requestId,
+        store: order.store,
+        vendor: order.vendor,
+        orderDate: order.orderDate,
+        items: order.items
       })
     });
 
-    setStatus('訂單文字已產生。');
-    $('recordStatus').textContent =
-      (localSaved ? '本次訂單已保存到目前瀏覽器。' : '本機紀錄未能保存。') +
-      ' Google 試算表寫入請求已送出，請另外確認「訂單明細」。';
-  } catch(e) {
-    setStatus('訂單文字已產生，但傳送時發生錯誤。請檢查網路後再試。');
-    $('recordStatus').textContent =
-      (localSaved ? '本機紀錄已保存。' : '本機紀錄未能保存。') +
-      ' 傳送 Google 試算表失敗：' + String(e.message || e);
+    setStatus(
+      (copied
+        ? '訂單文字已複製。'
+        : '未能自動複製，文字已選取，請按 Ctrl+C 複製。') +
+      (lineWindow
+        ? ' 已嘗試開啟 LINE。'
+        : ' 瀏覽器可能阻擋 LINE 視窗，請手動開啟 LINE。') +
+      ' 後台寫入請求已送出，請確認 Google 試算表「訂單明細」。'
+    );
+  } catch (e) {
+    setStatus(
+      '後台請求發生錯誤。請檢查網路，並確認 Google 試算表「訂單明細」。'
+    );
   }
 });
 
+
+/* 清除目前訂單輸出與數量 */
 $('clearBtn').addEventListener('click', () => {
-  itemsScroll.querySelectorAll('input.qty').forEach(input => input.value = '0');
+  itemsScroll.querySelectorAll('input.qty').forEach(input => {
+    input.value = '0';
+  });
+
   $('output').value = '';
-  setStatus('所有數量已清除並恢復為 0。');
+  currentOrder = null;
+  setStatus('已清除目前訂單與所有商品數量。');
 });
 
-$('copyBtn').addEventListener('click', async () => {
-  const text = $('output').value;
-  if(!text){
-    setStatus('目前沒有可複製的訂單內容，請先按「送出訂單」。');
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    setStatus('已複製訂單文字。');
-  } catch(e) {
-    $('output').focus();
-    $('output').select();
-    setStatus('瀏覽器未允許自動複製，已選取文字，請按 Ctrl+C 複製。');
-  }
-});
-
+ 
 $('reportMonth').value = localISODate().slice(0,7);
 $('reportMonth').addEventListener('change', renderReports);
 $('exportDetailBtn').addEventListener('click', exportDetail);
