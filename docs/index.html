@@ -468,7 +468,8 @@ $('submitBtn').addEventListener('click', () => {
 
 
 
-/* 複製文字並送出：先複製、送出後台，再開啟 LINE 分享 */
+
+/* 複製文字並送出：複製文字、寫入後台，再開啟 LINE 分享 */
 $('copyBtn').addEventListener('click', () => {
   const text = $('output').value;
   const order = currentOrder;
@@ -492,7 +493,6 @@ $('copyBtn').addEventListener('click', () => {
     button.textContent = '複製文字並送出';
   }, 3000);
 
-  // 先嘗試複製文字，避免開啟 LINE 後失去瀏覽器焦點。
   let copied = false;
   const temp = document.createElement('textarea');
   temp.value = text;
@@ -501,7 +501,6 @@ $('copyBtn').addEventListener('click', () => {
   temp.style.left = '-9999px';
   temp.style.top = '0';
   document.body.appendChild(temp);
-
   temp.focus();
   temp.select();
   temp.setSelectionRange(0, temp.value.length);
@@ -514,14 +513,11 @@ $('copyBtn').addEventListener('click', () => {
 
   temp.remove();
 
-  // 同時嘗試使用瀏覽器剪貼簿 API。
   if (navigator.clipboard &&
       typeof navigator.clipboard.writeText === 'function') {
     navigator.clipboard.writeText(text).catch(() => {});
   }
 
-  // 向 Google Apps Script 傳送訂單。
-  // keepalive 可降低切換到 LINE 時請求被中斷的風險。
   fetch(GOOGLE_SCRIPT_URL, {
     method: 'POST',
     mode: 'no-cors',
@@ -538,37 +534,19 @@ $('copyBtn').addEventListener('click', () => {
     })
   }).catch(() => {});
 
-  // LINE 分享畫面會帶入訂單文字，讓使用者自行選擇對象。
   const lineShareUrl =
     'https://line.me/R/share?text=' + encodeURIComponent(text);
 
   setStatus(
     (copied
       ? '已嘗試複製訂單文字。'
-      : '瀏覽器未確認複製成功，請在 LINE 分享畫面確認文字。') +
-    ' 已送出後台寫入請求，請稍後確認「訂單明細」。'
+      : '請在 LINE 分享畫面確認訂單文字。') +
+    ' 後台寫入請求已送出，請稍後確認「訂單明細」。'
   );
 
-  // 改用目前頁面直接導向 LINE 連結，不再另開新分頁。
   window.location.href = lineShareUrl;
 });
 
-
-    setStatus(
-      (lineWindow
-        ? '已嘗試開啟 LINE 分享畫面。'
-        : '瀏覽器可能阻擋了 LINE 分享畫面，請手動開啟 LINE。') +
-      (copied
-        ? ' 訂單文字已複製。'
-        : ' 自動複製未成功，訂單文字已選取，請手動複製。') +
-      ' 後台寫入請求已送出，請確認 Google 試算表「訂單明細」。'
-    );
-  } catch (e) {
-    setStatus(
-      '後台請求發生錯誤。請檢查網路及 Google 試算表「訂單明細」。'
-    );
-  }
-});
 
 
 /* 清除目前訂單輸出與數量 */
