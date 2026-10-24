@@ -466,7 +466,8 @@ $('submitBtn').addEventListener('click', () => {
 
 
 
-/* 複製文字並送出：複製、嘗試開啟 LINE、寫入後台 */
+
+/* 複製文字並送出：開啟 LINE 分享、嘗試複製、寫入後台 */
 $('copyBtn').addEventListener('click', async () => {
   const text = $('output').value;
   const order = currentOrder;
@@ -484,16 +485,21 @@ $('copyBtn').addEventListener('click', async () => {
   button.disabled = true;
   button.textContent = '處理中…';
 
-  // 先嘗試開啟 LINE；實際能否開啟 App 取決於裝置與瀏覽器。
-  const lineWindow = window.open('https://line.me/', '_blank');
-
-  // 3 秒後恢復按鈕。後端也會用 requestId 防止同一訂單重複記錄。
   setTimeout(() => {
     isSending = false;
     button.disabled = false;
     button.textContent = '複製文字並送出';
   }, 3000);
 
+  // 手機使用 LINE 官方分享連結，將訂單文字帶入分享畫面。
+  // 電腦也會嘗試開啟此連結，但 LINE 桌面版不保證支援。
+  const lineShareUrl =
+    'https://line.me/R/share?text=' + encodeURIComponent(text);
+
+  // 先在使用者點擊的操作期間嘗試開啟分享畫面。
+  const lineWindow = window.open(lineShareUrl, '_blank');
+
+  // 嘗試複製文字；若瀏覽器不允許，改為選取文字供手動複製。
   let copied = false;
 
   try {
@@ -504,6 +510,7 @@ $('copyBtn').addEventListener('click', async () => {
     $('output').select();
   }
 
+  // 向 Google Apps Script 傳送訂單。
   try {
     await fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
@@ -521,17 +528,17 @@ $('copyBtn').addEventListener('click', async () => {
     });
 
     setStatus(
-      (copied
-        ? '訂單文字已複製。'
-        : '未能自動複製，文字已選取，請按 Ctrl+C 複製。') +
       (lineWindow
-        ? ' 已嘗試開啟 LINE。'
-        : ' 瀏覽器可能阻擋 LINE 視窗，請手動開啟 LINE。') +
+        ? '已嘗試開啟 LINE 分享畫面。'
+        : '瀏覽器可能阻擋了 LINE 分享畫面，請手動開啟 LINE。') +
+      (copied
+        ? ' 訂單文字已複製。'
+        : ' 自動複製未成功，訂單文字已選取，請手動複製。') +
       ' 後台寫入請求已送出，請確認 Google 試算表「訂單明細」。'
     );
   } catch (e) {
     setStatus(
-      '後台請求發生錯誤。請檢查網路，並確認 Google 試算表「訂單明細」。'
+      '後台請求發生錯誤。請檢查網路及 Google 試算表「訂單明細」。'
     );
   }
 });
