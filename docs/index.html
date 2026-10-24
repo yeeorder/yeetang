@@ -467,8 +467,9 @@ $('submitBtn').addEventListener('click', () => {
 
 
 
-/* 複製文字並送出：開啟 LINE 分享、嘗試複製、寫入後台 */
-$('copyBtn').addEventListener('click', async () => {
+
+/* 複製文字並送出：先複製、送出後台，再開啟 LINE 分享 */
+$('copyBtn').addEventListener('click', () => {
   const text = $('output').value;
   const order = currentOrder;
 
@@ -491,41 +492,67 @@ $('copyBtn').addEventListener('click', async () => {
     button.textContent = '複製文字並送出';
   }, 3000);
 
-  // 手機使用 LINE 官方分享連結，將訂單文字帶入分享畫面。
-  // 電腦也會嘗試開啟此連結，但 LINE 桌面版不保證支援。
-  const lineShareUrl =
-    'https://line.me/R/share?text=' + encodeURIComponent(text);
-
-  // 先在使用者點擊的操作期間嘗試開啟分享畫面。
-  const lineWindow = window.open(lineShareUrl, '_blank');
-
-  // 嘗試複製文字；若瀏覽器不允許，改為選取文字供手動複製。
+  // 先嘗試複製文字，避免開啟 LINE 後失去瀏覽器焦點。
   let copied = false;
+  const temp = document.createElement('textarea');
+  temp.value = text;
+  temp.setAttribute('readonly', '');
+  temp.style.position = 'fixed';
+  temp.style.left = '-9999px';
+  temp.style.top = '0';
+  document.body.appendChild(temp);
+
+  temp.focus();
+  temp.select();
+  temp.setSelectionRange(0, temp.value.length);
 
   try {
-    await navigator.clipboard.writeText(text);
-    copied = true;
+    copied = document.execCommand('copy');
   } catch (e) {
-    $('output').focus();
-    $('output').select();
+    copied = false;
+  }
+
+  temp.remove();
+
+  // 同時嘗試使用瀏覽器剪貼簿 API。
+  if (navigator.clipboard &&
+      typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(text).catch(() => {});
   }
 
   // 向 Google Apps Script 傳送訂單。
-  try {
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
-      body: JSON.stringify({
-        requestId: order.requestId,
-        store: order.store,
-        vendor: order.vendor,
-        orderDate: order.orderDate,
-        items: order.items
-      })
-    });
+  // keepalive 可降低切換到 LINE 時請求被中斷的風險。
+  fetch(GOOGLE_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
+    keepalive: true,
+    body: JSON.stringify({
+      requestId: order.requestId,
+      store: order.store,
+      vendor: order.vendor,
+      orderDate: order.orderDate,
+      items: order.items
+    })
+  }).catch(() => {});
+
+  // LINE 分享畫面會帶入訂單文字，讓使用者自行選擇對象。
+  const lineShareUrl =
+    'https://line.me/R/share?text=' + encodeURIComponent(text);
+
+  setStatus(
+    (copied
+      ? '已嘗試複製訂單文字。'
+      : '瀏覽器未確認複製成功，請在 LINE 分享畫面確認文字。') +
+    ' 已送出後台寫入請求，請稍後確認「訂單明細」。'
+  );
+
+  // 改用目前頁面直接導向 LINE 連結，不再另開新分頁。
+  window.location.href = lineShareUrl;
+});
+
 
     setStatus(
       (lineWindow
